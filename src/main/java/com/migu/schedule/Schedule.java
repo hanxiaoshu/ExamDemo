@@ -2,54 +2,194 @@ package com.migu.schedule;
 
 
 import com.migu.schedule.constants.ReturnCodeKeys;
+import com.migu.schedule.info.ConsumptionInfo;
 import com.migu.schedule.info.TaskInfo;
 
-import java.util.List;
+import java.util.*;
 
 /*
-*ç±»åå’Œæ–¹æ³•ä¸èƒ½ä¿®æ”¹
+*ÀàÃûºÍ·½·¨²»ÄÜĞŞ¸Ä
  */
 public class Schedule {
 
+    //ÈÎÎñ´æ´¢
+    private TreeMap<Integer, ConsumptionInfo> taskIds = new TreeMap<Integer, ConsumptionInfo>();
+
+    //¹ÒÆğ¶ÓÁĞ£¬¸ù¾İÏûºÄÂÊ·Ö×é
+    private TreeMap<Integer, TreeSet<ConsumptionInfo>> hangUpQueue = new TreeMap<Integer, TreeSet<ConsumptionInfo>>();
+
+    //·şÎñÆ÷½Úµã£¬¸ù¾İnodeId·Ö×é
+    private TreeMap<Integer, TreeSet<ConsumptionInfo>> nodeServers = new TreeMap<Integer, TreeSet<ConsumptionInfo>>();
 
     public int init() {
-        // TODO æ–¹æ³•æœªå®ç°
-        return ReturnCodeKeys.E000;
+        taskIds = new TreeMap<Integer, ConsumptionInfo>();
+        hangUpQueue = new TreeMap<Integer, TreeSet<ConsumptionInfo>>();
+        nodeServers = new TreeMap<Integer, TreeSet<ConsumptionInfo>>();
+        return ReturnCodeKeys.E001;
     }
 
 
     public int registerNode(int nodeId) {
-        // TODO æ–¹æ³•æœªå®ç°
-        return ReturnCodeKeys.E000;
+
+        //²»·ûºÏÒªÇó
+        if (nodeId <= 0) {
+            return ReturnCodeKeys.E004;
+        }
+
+        //½ÚµãÒÑ´æÔÚ
+        if (nodeServers.containsKey(nodeId)) {
+            return ReturnCodeKeys.E005;
+        }
+
+        //×¼±¸½Úµã»ù´¡ĞÅÏ¢
+        TreeSet<ConsumptionInfo> consumptionInfos = new TreeSet<ConsumptionInfo>();
+        nodeServers.put(nodeId, consumptionInfos);
+        return ReturnCodeKeys.E003;
     }
 
     public int unregisterNode(int nodeId) {
-        // TODO æ–¹æ³•æœªå®ç°
-        return ReturnCodeKeys.E000;
+
+        //²»·ûºÏÒªÇó
+        if (nodeId <= 0) {
+            return ReturnCodeKeys.E004;
+        }
+
+        //½Úµã²»´æÔÚ
+        if (!nodeServers.containsKey(nodeId)) {
+            return ReturnCodeKeys.E007;
+        }
+
+        //ÒÆ³ı½Úµã
+        TreeSet<ConsumptionInfo> consumptionInfos = nodeServers.remove(nodeId);
+
+        //½«½ÚµãÄÚÈİ·ÅÈë¹ÒÆğ¶ÓÁĞ
+        Iterator<ConsumptionInfo> itr = consumptionInfos.iterator();
+        while (itr.hasNext()) {
+            ConsumptionInfo consumptionInfo = itr.next();
+            consumptionInfo.setNodeId(-1);//Àë¿ª½Úµã±äÎª-1
+            toHangUp(consumptionInfo);
+        }
+        return ReturnCodeKeys.E006;
+    }
+
+    private void toHangUp(ConsumptionInfo consumptionInfo) {
+
+        TreeSet<ConsumptionInfo> consumptionInfos = hangUpQueue.get(consumptionInfo.getConsumption());
+        if (null == consumptionInfos) {
+            consumptionInfos = new TreeSet<ConsumptionInfo>();
+            hangUpQueue.put(consumptionInfo.getConsumption(), consumptionInfos);
+        }
+        consumptionInfos.add(consumptionInfo);
     }
 
 
     public int addTask(int taskId, int consumption) {
-        // TODO æ–¹æ³•æœªå®ç°
-        return ReturnCodeKeys.E000;
+        //²»·ûºÏÒªÇó
+        if (taskId <= 0) {
+            return ReturnCodeKeys.E009;
+        }
+
+        //ÈÎÎñÒÑ´æÔÚ
+        if (taskIds.containsKey(taskId)) {
+            return ReturnCodeKeys.E010;
+        }
+        ConsumptionInfo consumptionInfo = new ConsumptionInfo(taskId, consumption);
+        taskIds.put(taskId, consumptionInfo);
+
+        //·ÅÈë¹ÒÆğ¶ÓÁĞ
+        toHangUp(consumptionInfo);
+        return ReturnCodeKeys.E008;
     }
 
 
     public int deleteTask(int taskId) {
-        // TODO æ–¹æ³•æœªå®ç°
-        return ReturnCodeKeys.E000;
+        //²»·ûºÏÒªÇó
+        if (taskId <= 0) {
+            return ReturnCodeKeys.E009;
+        }
+
+        //ÈÎÎñÒÑ´æÔÚ
+        if (!taskIds.containsKey(taskId)) {
+            return ReturnCodeKeys.E012;
+        }
+
+        //É¾³ı´æ´¢
+        ConsumptionInfo consumptionInfo = taskIds.remove(taskId);
+
+        //É¾³ı¹ÒÆğ¶ÓÁĞÖĞµÄ
+        deleteTask(consumptionInfo, this.hangUpQueue);
+
+        //É¾³ı½ÚµãÖĞµÄ
+        deleteTask(consumptionInfo, this.nodeServers);
+        return ReturnCodeKeys.E011;
+    }
+
+    private void deleteTask(ConsumptionInfo consumptionInfo, TreeMap<Integer, TreeSet<ConsumptionInfo>> consumptionInfosMap) {
+        Iterator<Map.Entry<Integer, TreeSet<ConsumptionInfo>>> itr = consumptionInfosMap.entrySet().iterator();
+        while (itr.hasNext()) {
+            itr.next().getValue().remove(consumptionInfo);
+        }
     }
 
 
     public int scheduleTask(int threshold) {
-        // TODO æ–¹æ³•æœªå®ç°
-        return ReturnCodeKeys.E000;
+        //·§Öµ²»¶Ô
+        if (threshold <= 0) {
+            return ReturnCodeKeys.E002;
+        }
+
+        for (ConsumptionInfo consumptionInfo : taskIds.values()) {
+            toHangUp(consumptionInfo);
+        }
+        int nodeSize = nodeServers.size();
+        int[] consumptions = new int[nodeSize];
+        TreeSet<ConsumptionInfo>[] cpis = new TreeSet[nodeSize];
+        for (int i = 0; i< nodeSize; i++) {
+            cpis[i] = new TreeSet<ConsumptionInfo>();
+        }
+
+        TreeMap<Integer, TreeSet<ConsumptionInfo>> nodeServersBak = new TreeMap<Integer, TreeSet<ConsumptionInfo>>();
+        int idx = 0;
+        Collection<TreeSet<ConsumptionInfo>> cpiSetCol = hangUpQueue.values();
+        for (TreeSet<ConsumptionInfo> cpiSet : cpiSetCol) {
+            for (ConsumptionInfo cpi : cpiSet) {
+                consumptions[idx] += cpi.getConsumption();
+                cpis[idx].add(cpi);
+                if (idx == nodeSize) {
+                    idx = 0;
+                }
+            }
+        }
+        Arrays.sort(consumptions);
+
+        //×î´ó¼õ×îĞ¡´óÓÚ·§Öµ
+        if (consumptions[nodeSize -1] - consumptions[0] > threshold) {
+            return ReturnCodeKeys.E014;
+        }
+
+        Iterator<Map.Entry<Integer, TreeSet<ConsumptionInfo>>> itr = nodeServers.entrySet().iterator();
+        while (itr.hasNext()) {
+            Map.Entry<Integer, TreeSet<ConsumptionInfo>> en = itr.next();
+            Integer nodeId = en.getKey();
+            TreeSet<ConsumptionInfo> consumptionInfosSet =  en.getValue();
+
+        }
+
+        return ReturnCodeKeys.E013;
     }
 
 
     public int queryTaskStatus(List<TaskInfo> tasks) {
-        // TODO æ–¹æ³•æœªå®ç°
-        return ReturnCodeKeys.E000;
+        if (null == tasks) {
+            return ReturnCodeKeys.E016;
+        }
+        tasks.clear();
+        for (ConsumptionInfo consumptionInfo : taskIds.values()) {
+            TaskInfo taskInfo = new TaskInfo();
+            taskInfo.setNodeId(consumptionInfo.getNodeId());
+            taskInfo.setTaskId(consumptionInfo.getTaskId());
+            tasks.add(taskInfo);
+        }
+        return ReturnCodeKeys.E015;
     }
-
 }
